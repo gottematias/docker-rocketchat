@@ -1,0 +1,71 @@
+version: "3.9"
+
+networks:
+  gotte-net:
+    external: true
+  rocketchat_backnet:
+    ipam:
+      config:
+        - subnet: 172.100.2.0/24
+
+volumes:
+  mongodb: {}
+  uploads: {}
+
+services:
+  mongo:
+    image: mongo:4.0.28
+    container_name: rocketchat_db
+    restart: unless-stopped
+    volumes:
+      - mongodb:/data/db
+    command: mongod --smallfiles --oplogSize 128 --replSet rs0 --storageEngine=mmapv1
+    networks:
+      - rocketchat_backnet
+  
+  mongo-init-replica:
+    image: mongo:4.0.28
+    container_name: rocketchat_db_replica
+    command: >
+      bash -c
+        "for i in `seq 1 30`; do
+          mongo mongo/rocketchat --eval \"
+            rs.initiate({
+              _id: 'rs0',
+              members: [ { _id: 0, host: 'localhost:27017' } ]})\" &&
+          s=$$? && break || s=$$?;
+          echo \"Tried $$i times. Waiting 5 secs...\";
+          sleep 5;
+        done; (exit $$s)"
+    depends_on:
+      - mongo
+    networks:
+      - rocketchat_backnet
+
+  rocketchat:
+    image: rocket.chat:3.18.5
+    container_name: rocketchat_app
+    restart: unless-stopped
+    command: >
+      bash -c
+        "for i in `seq 1 30`; do
+          node main.js &&
+          s=$$? && break || s=$$?;
+          echo \"Tried $$i times. Waiting 5 secs...\";
+          sleep 5;
+        done; (exit $$s)"
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      - PORT=80
+      - ROOT_URL=http://chat.manigo.local
+      - MONGO_URL=mongodb://mongo:27017/rocketchat
+      - MONGO_OPLOG_URL=mongodb://mongo:27017/local
+    depends_on:
+      - mongo
+    ports:
+      - 80:80
+    networks:
+      gotte-net:
+        ipv4_address: 190.160.0.203
+      rocketchat_backnet: {}

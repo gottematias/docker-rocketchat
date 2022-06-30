@@ -1,0 +1,9 @@
+# Comandos MongoDB
+# Dump: docker-compose exec -T mongo sh -c 'mongodump --archive' > db.dump
+# Restore: docker-compose exec -T mongo sh -c 'mongorestore --archive' < db.dump
+
+# Docker Compose up
+# docker-compose up -d
+
+# Docker Compose down and erase
+# docker-compose down && docker volume rm rocketchat_mongodb rocketchat_uploads
